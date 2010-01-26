@@ -1,0 +1,16 @@
+RRB
+
+
+A Rickety Rope Bridge
+
+rrb [options] [near hw addr] [far hw addr]
+
+RRB buffers packets seen for near hw addr and sends them to far hw addr
+with configurable behavior such as how long it takes to cross the bridge,
+whether all packets in order, and how many packets fall off.
+
+
+Currently it doesn't take any options and just buffers the frames for
+a fixed 1.5 seconds.
+
+There are some in-kernel similar options, 'dummynet' and 'netem'

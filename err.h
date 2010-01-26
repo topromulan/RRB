@@ -1,0 +1,3 @@
+
+void err(char *explanation);
+
