@@ -14,3 +14,8 @@ Currently it doesn't take any options and just buffers the frames for
 a fixed 1.5 seconds.
 
 There are some in-kernel similar options, 'dummynet' and 'netem'
+
+To build it:
+
+cc rrb.c err.c mac.c
+
