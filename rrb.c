@@ -18,8 +18,6 @@
 #include <linux/if_packet.h>
 
 
-
-//#include "hexdump.h"
 #include "err.h"
 #include "mac.h"
 
@@ -39,12 +37,16 @@ typedef struct frame {
 	/* What time to send at */
 	struct timeval timetogo;
 
+	/* Next member in a linked list */
 	struct frame *next;
 
-	/* The frame, this must be last for memory alloc! */
+	/* The frame - this must be last for our memory plans */
 	framedata_t data;
 } frame_t;
 
+
+void create_sockets(int *input, int *output);
+void bind_sockets(char *iface1, int input, char *iface2, int output);
 
 inline void schedule_frame(frame_t *f);
 inline void queue_frame(frame_t *f);
@@ -55,38 +57,12 @@ inline int count_frames(void);
 
 
 int main(void) {
+
 	int input, output; 
 
-	/* stevens 793 */
-	if ( 0 > (input = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_IP))) )
-		err("socket()");
-	if ( 0 > (output = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_IP))) )
-		err("socket()");
+	create_sockets(&input, &output);
+	bind_sockets("wlan0", input, "lo", output);
 
-	if ( 0 > fcntl(input, F_SETFL, fcntl(F_GETFL, 0) | O_NONBLOCK) )
-		err("fcntl()");
-	
-	/* SIOCGIFINDEX */
-	/* see also packet/af_packet.c */
-
-	struct sockaddr_ll in_nic, out_nic;
-	memset(&in_nic, 0, sizeof(in_nic));
-	memset(&out_nic, 0, sizeof(out_nic));
-
-	in_nic.sll_family = out_nic.sll_family = AF_PACKET;
-	in_nic.sll_protocol = out_nic.sll_protocol = htons(ETH_P_ALL);
-	in_nic.sll_ifindex = if_nametoindex("nic2");
-	out_nic.sll_ifindex = if_nametoindex("nic1");
-	/* nic.sll_hatype .. not sure what values are .. leave as 0 */
-	/* nic.sll_pkttype = */
-	/* nic.sll_halen = ? */
-	/* nic.sll_addr = ? */
-
-	if ( 0 > bind(input, (struct sockaddr *)&in_nic, sizeof(in_nic) ) )
-		err("bind()");
-	if ( 0 > bind(output, (struct sockaddr *)&out_nic, sizeof(out_nic) ) )
-		err("bind()");
-	
 	/* main program part.. */
 
 	frame_t work;
@@ -114,18 +90,53 @@ int main(void) {
 		mswait = ttn_frame();
 
 		poll(&pollinput, 1, mswait);
-
 	}
 
-	/* I must speak to a highly concerning confluence
-	 *  of malfeasance taken place */
-	
 	return 0;
 }
 
+/* Output parameters are the new file descripters */
+void create_sockets(int *input, int *output)
+{
+	/* stevens 793 */
+	if ( 0 > (*input = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_IP))) )
+		err("socket()");
+	if ( 0 > (*output = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_IP))) )
+		err("socket()");
 
-/*		mac_atob("F5:0:0:0:0:1", work.eth.h_source);
-		mac_atob("F5:0:0:0:0:2", work.eth.h_dest);*/
+	/* Input set to non blocking */
+	if ( 0 > fcntl(*input, F_SETFL, fcntl(F_GETFL, 0) | O_NONBLOCK) )
+		err("fcntl()");
+}
+
+void bind_sockets(char *iface1, int input, char *iface2, int output)
+{
+
+	/* SIOCGIFINDEX */
+	/* see also packet/af_packet.c */
+
+	struct sockaddr_ll in_nic, out_nic;
+	memset(&in_nic, 0, sizeof(in_nic));
+	memset(&out_nic, 0, sizeof(out_nic));
+
+	in_nic.sll_family = out_nic.sll_family = AF_PACKET;
+	in_nic.sll_protocol = out_nic.sll_protocol = htons(ETH_P_ALL);
+	if ( ! (in_nic.sll_ifindex = if_nametoindex(iface1) ) )
+		err("if_nametoindex()");
+	if ( ! (out_nic.sll_ifindex = if_nametoindex(iface2) ) )
+		err("if_nametoindex()");
+	/* nic.sll_hatype .. not sure what values are .. leave as 0 */
+	/* nic.sll_pkttype = */
+	/* nic.sll_halen = ? */
+	/* nic.sll_addr = ? */
+
+	if ( 0 > bind(input, (struct sockaddr *)&in_nic, sizeof(in_nic) ) )
+		err("bind()");
+	if ( 0 > bind(output, (struct sockaddr *)&out_nic, sizeof(out_nic) ) )
+		err("bind()");
+
+}
+	
 
 inline void schedule_frame(frame_t *f) {
 	struct timeval tv, diff;
@@ -141,6 +152,7 @@ inline void schedule_frame(frame_t *f) {
 	timeradd(&tv, &diff, &f->timetogo);
 	
 }
+
 inline void translate_frame(frame_t *f) {
 	mac_atob("F5:0:0:0:0:1", f->data.eth.h_source);
 	mac_atob("F5:0:0:0:0:2", f->data.eth.h_dest);
